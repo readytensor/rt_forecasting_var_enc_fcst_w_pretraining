@@ -131,7 +131,7 @@ class Forecaster:
         """
         X, y = self._get_X_and_y(data, is_train=True)
         print("X and y shapes:", X.shape, y.shape)
-        loss_to_monitor = 'loss' if validation_split is None else 'val_loss'
+        loss_to_monitor = 'loss' # if validation_split is None else 'val_loss'
         patience = get_patience_factor(X.shape[0])
         early_stop_callback = EarlyStopping(
             monitor=loss_to_monitor, min_delta = 1e-4, patience=patience)
@@ -160,14 +160,7 @@ class Forecaster:
     def fit(self, training_data:np.ndarray, pre_training_data: Union[np.ndarray, None]=None,
             validation_split: Union[float, None]=0.1, verbose:int=1,
             max_epochs:int=1000):
-
-        """Fit the Forecaster to the training data.
-        A separate Prophet model is fit to each series that is contained
-        in the data.
-
-        Args:
-            data (pandas.DataFrame): The features of the training data.
-        """
+        """Fit the Forecaster to the training data."""
         if pre_training_data is not None:
             print("Conducting pretraining...")
             _ = self._train_on_data(
