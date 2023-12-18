@@ -1,0 +1,8 @@
+{
+  "encode_to_decode_ratio": 4,
+  "activation": "tanh",
+  "latent_dim": 5,
+  "first_hidden_dim": 200,
+  "second_hidden_dim": 100,
+  "use_exogenous": true
+}
