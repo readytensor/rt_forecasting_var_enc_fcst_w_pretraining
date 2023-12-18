@@ -5,7 +5,7 @@ from preprocessing.custom_transformers import TimeSeriesMinMaxScaler
 
 np.random.seed(1)
 
-MAX_NUM_PRETRAINING_SERIES = 150_000
+MAX_NUM_PRETRAINING_SERIES = 50_000
 
 def calculate_max_N(T: int, D: int, target_ram_gb: float) -> int:
     """
@@ -27,9 +27,6 @@ def calculate_max_N(T: int, D: int, target_ram_gb: float) -> int:
     max_N = target_ram_bytes / (T * D * element_size)
 
     return int(min(max_N, MAX_NUM_PRETRAINING_SERIES))
-
-# Example usage
-N = calculate_max_N(T=100, D=50, target_ram_gb=5)
 
 
 def generate_seasonal_factors(
@@ -318,7 +315,7 @@ def get_pretraining_data(
                     containing the synthetic time series data and exogenous features.
     """
     # Calculate # of samples to generate
-    num_series = calculate_max_N(series_len, 1 + num_exog, target_ram_gb=4.0)
+    num_series = calculate_max_N(series_len, 1 + num_exog, target_ram_gb=3.0)
     # Generate base synthetic data
     synthetic_data = generate_synthetic_data(num_series, series_len, frequency)
 
