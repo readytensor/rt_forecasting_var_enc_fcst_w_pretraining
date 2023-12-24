@@ -56,7 +56,6 @@ class Forecaster:
     This class provides a consistent interface that can be used with other
     Forecaster models.
     """
-    MIN_HISTORY_LEN = 60        # in epochs
     MODEL_NAME = "Variational_Encoding_Forecaster"
 
     def __init__(
