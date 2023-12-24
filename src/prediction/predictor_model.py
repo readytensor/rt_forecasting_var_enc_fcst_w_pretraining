@@ -12,12 +12,14 @@ from sklearn.exceptions import NotFittedError
 warnings.filterwarnings("ignore")
 import tensorflow as tf
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, Callback
-from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.optimizers import Adam, SGD
 
 # from prediction.vae_dense_model import VariationalAutoencoderDense as VAE
 from prediction.vae_conv_model import VariationalAutoencoderConv as VAE
 from prediction.pretraining_data_gen import get_pretraining_data
+from logger import get_logger
 
+logger = get_logger(__name__)
 
 # Check for GPU availability
 IS_GPU_AVAI = (
@@ -25,7 +27,7 @@ IS_GPU_AVAI = (
     if tf.config.list_physical_devices("GPU")
     else "GPU not available"
 )
-print(IS_GPU_AVAI)
+logger.info(IS_GPU_AVAI)
 
 PREDICTOR_FILE_NAME = "predictor.joblib"
 MODEL_PARAMS_FNAME = "model_params.save"
@@ -65,17 +67,23 @@ class Forecaster:
                 latent_dim,
                 first_hidden_dim,
                 second_hidden_dim,
-                reconstruction_wt=5.0, **kwargs ):
+                third_hidden_dim,
+                reconstruction_wt=100.0,
+                learning_rate=1e-3,
+                **kwargs ):
         
         self.encode_len = encode_len
         self.decode_len = decode_len
         self.feat_dim = 1+num_exog
         self.latent_dim = latent_dim
-        self.first_hidden_dim = first_hidden_dim
-        self.second_hidden_dim = second_hidden_dim
-        self.hidden_layer_sizes = [int(first_hidden_dim), int(second_hidden_dim)]
+        self.hidden_layer_sizes = [
+            int(first_hidden_dim),
+            int(second_hidden_dim),
+            int(third_hidden_dim)
+        ]
         self.reconstruction_wt = reconstruction_wt
-        self.batch_size = 32
+        self.learning_rate = learning_rate
+        self.batch_size = None
 
         self.vae_model = VAE(
             encode_len=encode_len,
@@ -85,11 +93,9 @@ class Forecaster:
             hidden_layer_sizes=self.hidden_layer_sizes,
             reconstruction_wt = reconstruction_wt
         )   
-        self.learning_rate = 1e-4
         self.vae_model.compile(optimizer=Adam(self.learning_rate))
         self._is_trained = False
-        # self.vae_model.encoder.summary()
-        # self.vae_model.decoder.summary()
+        # self.vae_model.summary()
 
     def _get_X_and_y(self, data: np.ndarray, is_train:bool=True) -> np.ndarray:
         """Extract X (historical target series) and y (forecast window target) 
@@ -130,9 +136,14 @@ class Forecaster:
             data (pandas.DataFrame): The training data.
         """
         X, y = self._get_X_and_y(data, is_train=True)
-        print("X and y shapes:", X.shape, y.shape)
-        loss_to_monitor = 'loss' # if validation_split is None else 'val_loss'
+        # print("X and y shapes:", X.shape, y.shape)
+        if X.shape[0] < 100:
+            validation_split = None
+        self.batch_size = min(X.shape[0] // 8, 256)
+        logger.info(f"Using batch_size = {self.batch_size}")
+        loss_to_monitor = 'loss' if validation_split is None else 'val_loss'
         patience = get_patience_factor(X.shape[0])
+        logger.info(f"patience for early stopping = {patience}")
         early_stop_callback = EarlyStopping(
             monitor=loss_to_monitor, min_delta = 1e-4, patience=patience)
         learning_rate_reduction = ReduceLROnPlateau(
@@ -141,8 +152,6 @@ class Forecaster:
             factor=0.5,
             min_lr=1e-7
         )
-        if X.shape[0] < 100:
-            validation_split = None
         history = self.vae_model.fit(
             x=X,
             y=y,
@@ -160,17 +169,16 @@ class Forecaster:
     def fit(self, training_data:np.ndarray, pre_training_data: Union[np.ndarray, None]=None,
             validation_split: Union[float, None]=0.1, verbose:int=1,
             max_epochs:int=1000):
-        """Fit the Forecaster to the training data."""
         if pre_training_data is not None:
-            print("Conducting pretraining...")
-            _ = self._train_on_data(
+            logger.info("Conducting pretraining...")
+            history = self._train_on_data(
                 data=pre_training_data,
                 validation_split=validation_split,
                 verbose=verbose,
                 max_epochs=max_epochs
             )
         
-        print("Training on main data...")
+        logger.info("Training on main data...")
         history = self._train_on_data(
             data=training_data,
             validation_split=validation_split,
@@ -200,7 +208,7 @@ class Forecaster:
         Returns:
             float: loss value (mse).
         """
-        X, y = self._get_X_and_y(test_data, is_train=False)
+        X, y = self._get_X_and_y(test_data, is_train=True)
         score = self.vae_model.evaluate(x=X, y=y)
         return score
 
@@ -221,9 +229,9 @@ class Forecaster:
             'decode_len': self.decode_len,
             'feat_dim': self.feat_dim,
             'latent_dim': self.latent_dim,
-            'first_hidden_dim': self.first_hidden_dim,
-            'second_hidden_dim': self.second_hidden_dim,
+            'hidden_layer_sizes': self.hidden_layer_sizes,
             'reconstruction_wt': self.reconstruction_wt,
+            'learning_rate': self.learning_rate,
         }
         joblib.dump(model_params, os.path.join(model_dir_path, MODEL_PARAMS_FNAME))
 
@@ -237,32 +245,27 @@ class Forecaster:
             Forecaster: A new instance of the loaded forecaster.
         """
         dict_params = joblib.load(os.path.join(model_dir_path, MODEL_PARAMS_FNAME))
+        first_hidden_dim = int(dict_params['hidden_layer_sizes'][0])
+        second_hidden_dim = int(dict_params['hidden_layer_sizes'][1])
+        third_hidden_dim = int(dict_params['hidden_layer_sizes'][2])
         model = cls(
             encode_len = dict_params['encode_len'],
             decode_len = dict_params['decode_len'],
             num_exog = dict_params['feat_dim']-1,
             latent_dim = dict_params['latent_dim'],
-            first_hidden_dim=dict_params['first_hidden_dim'],
-            second_hidden_dim=dict_params['second_hidden_dim'],
-            reconstruction_wt = dict_params['reconstruction_wt']
-        )
-
-        first_hidden_dim = int(dict_params['first_hidden_dim'])
-        second_hidden_dim = int(dict_params['second_hidden_dim'])
-
-        model.vae_model = VAE(
-            encode_len = dict_params['encode_len'],
-            decode_len = dict_params['decode_len'],
-            feat_dim = dict_params['feat_dim'],
-            latent_dim = dict_params['latent_dim'],
-            hidden_layer_sizes=[first_hidden_dim, second_hidden_dim ],
+            first_hidden_dim=first_hidden_dim,
+            second_hidden_dim=second_hidden_dim,
+            third_hidden_dim=third_hidden_dim,
             reconstruction_wt = dict_params['reconstruction_wt'],
+            learning_rate = dict_params['learning_rate']
         )
         encoder_wts = joblib.load(os.path.join(model_dir_path, MODEL_ENCODER_WTS_FNAME))
         decoder_wts = joblib.load(os.path.join(model_dir_path, MODEL_DECODER_WTS_FNAME))
         model.vae_model.encoder.set_weights(encoder_wts)
         model.vae_model.decoder.set_weights(decoder_wts)
-        model.vae_model.compile(optimizer=Adam(learning_rate = 1e-4))
+        model.vae_model.compile(
+            optimizer=Adam(learning_rate = dict_params['learning_rate'])
+        )
         return model
 
     def __str__(self):

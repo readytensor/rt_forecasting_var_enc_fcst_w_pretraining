@@ -1,8 +1,10 @@
 {
   "encode_to_decode_ratio": 4,
-  "activation": "tanh",
-  "latent_dim": 5,
-  "first_hidden_dim": 200,
+  "latent_dim": 8,
+  "first_hidden_dim": 250,
   "second_hidden_dim": 100,
-  "use_exogenous": true
+  "third_hidden_dim": 50,
+  "reconstruction_wt": 200.0,
+  "use_exogenous": true,
+  "learning_rate": 1e-3
 }

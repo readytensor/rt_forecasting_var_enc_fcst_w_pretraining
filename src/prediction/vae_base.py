@@ -12,7 +12,7 @@ from tensorflow.keras.metrics import Mean
 
 
 class BaseVariationalAutoencoder(Model, ABC):
-    def __init__(self,
+    def __init__(self,  
             encode_len,
             decode_len,
             feat_dim,
@@ -28,15 +28,15 @@ class BaseVariationalAutoencoder(Model, ABC):
         self.total_loss_tracker = Mean(name="total_loss")
         self.reconstruction_loss_tracker = Mean( name="reconstruction_loss" )
         self.kl_loss_tracker = Mean(name="kl_loss")
-
         self.encoder = None
-        self.decoder = None 
+        self.decoder = None
  
 
     def call(self, X):
         z_mean, _, _ = self.encoder(X)
         x_decoded = self.decoder(z_mean)
-        if len(x_decoded.shape) == 1: x_decoded = x_decoded.reshape((1, -1))
+        if len(x_decoded.shape) == 1:
+            x_decoded = x_decoded.reshape((1, -1))
         return x_decoded
 
 
@@ -46,14 +46,7 @@ class BaseVariationalAutoencoder(Model, ABC):
         totalParams = trainableParams + nonTrainableParams
         return trainableParams, nonTrainableParams, totalParams
 
-
-    def get_prior_samples(self, num_samples):
-        Z = np.random.randn(num_samples, self.latent_dim)
-        samples = self.decoder.predict(Z)
-        return samples
-    
-
-    def get_prior_samples_given_Z(self, Z):
+    def get_prior_samples(self, Z):
         samples = self.decoder.predict(Z)
         return samples
 
@@ -73,17 +66,15 @@ class BaseVariationalAutoencoder(Model, ABC):
         self.decoder.summary()
 
 
-    def train_step(self, data):
+    def train_step(self, data): 
         X, Y = data
         with tf.GradientTape() as tape:
             z_mean, z_log_var, z = self.encoder(X)
             reconstruction = self.decoder(z)
             err = tf.math.squared_difference(Y, reconstruction)
-            reconstruction_loss = tf.reduce_sum(err)
-
+            reconstruction_loss = tf.reduce_mean(err)
             kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
-            kl_loss = tf.reduce_sum(tf.reduce_sum(kl_loss, axis=1))
-
+            kl_loss = tf.reduce_mean(kl_loss)
             total_loss = self.reconstruction_wt * reconstruction_loss + kl_loss
 
         grads = tape.gradient(total_loss, self.trainable_weights)
@@ -104,12 +95,9 @@ class BaseVariationalAutoencoder(Model, ABC):
         reconstruction = self.decoder(z)
         err = tf.math.squared_difference(Y, reconstruction)
         reconstruction_loss = tf.reduce_sum(err)
-
         kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
-        kl_loss = tf.reduce_sum(tf.reduce_sum(kl_loss, axis=1))
-
+        kl_loss = tf.reduce_sum(kl_loss)
         total_loss = self.reconstruction_wt * reconstruction_loss + kl_loss
-
         self.total_loss_tracker.update_state(total_loss)
         self.reconstruction_loss_tracker.update_state(reconstruction_loss)
         self.kl_loss_tracker.update_state(kl_loss)

@@ -29,12 +29,10 @@ class VariationalAutoencoderConv(BaseVariationalAutoencoder):
     def __init__(
             self,
             hidden_layer_sizes,
-            **kwargs           
+            **kwargs  
         ):
         super(VariationalAutoencoderConv, self).__init__(**kwargs)
-
         self.hidden_layer_sizes = hidden_layer_sizes
-
         self.encoder = self._get_encoder()
         self.decoder = self._get_decoder()
 
@@ -42,20 +40,18 @@ class VariationalAutoencoderConv(BaseVariationalAutoencoder):
     def _get_encoder(self):
         encoder_inputs = Input(shape=(self.encode_len, self.feat_dim), name='encoder_input')
         x = encoder_inputs
-               
         for i, num_filters in enumerate(self.hidden_layer_sizes):
             x = Conv1D(
                     filters = num_filters,
-                    kernel_size=3, 
-                    strides=2, 
-                    activation='relu', 
+                    kernel_size=3,
+                    strides=2,
+                    activation='relu',
                     padding='same',
-                    name=f'enc_conv_{i}')(x)
+                    name=f'enc_conv1d_{i}')(x)
 
         x = Flatten(name='enc_flatten')(x)
 
-        # save the dimensionality of this last dense layer before the hidden state layer. 
-        # We need it in the decoder.
+        # save the dimensionality of this last dense layer before the hidden state layer. We need it in the decoder.
         self.encoder_last_dense_dim = x.get_shape()[-1]        
 
         z_mean = Dense(self.latent_dim, name="z_mean")(x)
@@ -66,7 +62,7 @@ class VariationalAutoencoderConv(BaseVariationalAutoencoder):
         
         
         encoder = Model(encoder_inputs, [z_mean, z_log_var, encoder_output], name="encoder")
-        # encoder.summary(); sys.exit()
+        # encoder.summary()
         return encoder
 
 
@@ -79,25 +75,24 @@ class VariationalAutoencoderConv(BaseVariationalAutoencoder):
 
         for i, num_filters in enumerate(reversed(self.hidden_layer_sizes[:-1])):
             x = Conv1DTranspose(
-                filters = num_filters,
-                    kernel_size=3,
-                    strides=2,
+                filters = num_filters, 
+                    kernel_size=3, 
+                    strides=2, 
                     padding='same',
                     activation='relu', 
                     name=f'dec_deconv_{i}')(x)
 
         # last de-convolution
         x = Conv1DTranspose(
-                filters = self.feat_dim,
+                filters = 1, 
                     kernel_size=3, 
                     strides=2, 
                     padding='same',
                     activation='relu', 
                     name=f'dec_deconv__{i+1}')(x)
 
-        x = Flatten(name='dec_flatten')(x)    
-
-        self.decoder_outputs = Dense(self.decode_len, name="decoder_dense_final")(x)
-        decoder = Model(decoder_inputs, self.decoder_outputs, name="decoder")
-
+        x = Flatten(name='dec_flatten')(x)
+        decoder_outputs = Dense(self.decode_len, name='decoder_output')(x)
+        decoder = Model(decoder_inputs, decoder_outputs, name="decoder")
+        # decoder.summary()
         return decoder
