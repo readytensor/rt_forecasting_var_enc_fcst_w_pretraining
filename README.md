@@ -18,6 +18,16 @@ The following are the requirements for using your data with this model:
 
 ---
 
+### Covariates Support:
+
+- Past ✅
+- Future ❌
+- Static ✅
+
+> > This implementation treats static covariates as past covariates.
+
+---
+
 Here are the highlights of this implementation: <br/>
 
 - A **Variational Encoding Forecaster** algorithm built using **TensorFlow / Keras**
