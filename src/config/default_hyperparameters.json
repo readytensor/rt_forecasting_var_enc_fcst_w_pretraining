@@ -6,5 +6,6 @@
   "third_hidden_dim": 50,
   "reconstruction_wt": 200.0,
   "use_exogenous": true,
-  "learning_rate": 1e-3
+  "learning_rate": 1e-3,
+  "min_windows": 25
 }
