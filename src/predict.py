@@ -17,7 +17,7 @@ from utils import (
     read_json_as_dict,
     save_dataframe_as_csv,
     cast_time_col,
-    TimeAndMemoryTracker,
+    ResourceTracker,
 )
 
 logger = get_logger(task_name="predict")
@@ -93,7 +93,7 @@ def run_batch_predictions(
     """
 
     try:
-        with TimeAndMemoryTracker(logger) as _:
+        with ResourceTracker(logger, monitoring_interval=5):
 
             logger.info("Making batch predictions...")
             logger.info("Loading schema...")
@@ -133,7 +133,7 @@ def run_batch_predictions(
             logger.info("Loading predictor model...")
             predictor_model = load_predictor_model(predictor_dir_path)
 
-            logger.info("Making predictions...")        
+            logger.info("Making predictions...")
             predictions_arr = predict_with_model(
                 predictor_model, transformed_train_data
             )
