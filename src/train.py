@@ -52,7 +52,6 @@ def run_training(
     try:
 
         with ResourceTracker(logger, monitoring_interval=0.1):
-            tracemalloc.start()
             logger.info("Starting training...")
             # load and save schema
             logger.info("Loading and saving schema...")
@@ -110,10 +109,6 @@ def run_training(
                 frequency=data_schema.frequency,
                 hyperparameters=default_hyperparameters,
             )
-        _, peak = tracemalloc.get_traced_memory()
-        peak_python_memory_mb = peak / (1024**2)
-        tracemalloc.stop()
-        logger.info(f"Peak Python Allocated Memory: {peak_python_memory_mb:.2f} MB")
 
         # Save pipelines
         logger.info("Saving pipelines...")
