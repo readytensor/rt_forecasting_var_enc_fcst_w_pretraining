@@ -2,26 +2,33 @@
 FROM tensorflow/tensorflow:2.15.0-gpu as builder
 
 
-# Install Python 3.8 if available in the default repositories
+# Install build dependencies for Python
 RUN apt-get update && \
-    apt-get install -y python3.8 python3.8-distutils python3.8-venv && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get install -y build-essential libffi-dev libssl-dev zlib1g-dev \
+    liblzma-dev libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm \
+    libncurses5-dev libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev libpq-dev
 
-# Set Python 3.8 as the default python3 (if needed)
+# Download and compile Python 3.8
+RUN wget https://www.python.org/ftp/python/3.8.12/Python-3.8.12.tar.xz && \
+    tar -xf Python-3.8.12.tar.xz && \
+    cd Python-3.8.12 && \
+    ./configure --enable-optimizations && \
+    make -j 8 && \
+    make altinstall
+
+# Clean up
+RUN apt-get autoremove -y && apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* Python-3.8.12.tar.xz Python-3.8.12
+
+# Verify Python version
+RUN python3.8 --version
+
+# Set Python 3.8 as the default python3
 RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.8 1 && \
     update-alternatives --set python3 /usr/bin/python3.8
 
-# Verify Python version
-RUN python3 --version
-
 # Install pip for Python 3.8
-RUN apt-get update && \
-    apt-get install -y curl && \
-    curl https://bootstrap.pypa.io/get-pip.py | python3.8 && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
+RUN curl https://bootstrap.pypa.io/get-pip.py | python3.8
 # copy src code into image and chmod scripts
 COPY src ./opt/src
 COPY ./entry_point.sh /opt/
