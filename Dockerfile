@@ -1,33 +1,45 @@
-# Use an TensorFlow-GPU base image
-FROM tensorflow/tensorflow:2.15.0-gpu as builder
+# Use an NVIDIA CUDA base image
+FROM nvidia/cuda:12.3.1-runtime-ubuntu20.04 as builder
 
-# Install build dependencies and Python 3.9
+# Avoid prompts from apt
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install OS dependencies
+RUN apt-get -y update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    dos2unix \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python 3.9 and pip
 RUN apt-get update && apt-get install -y --no-install-recommends \
     software-properties-common \
     && add-apt-repository ppa:deadsnakes/ppa \
-    && apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    dos2unix \
-    wget \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
     python3.9 \
     python3.9-distutils \
-    python3.9-dev \
-    python3-pip \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Update alternatives to use Python 3.9 as the default python3
+# Install pip for Python 3.9
+RUN apt-get update && apt-get install -y wget \
+    && wget https://bootstrap.pypa.io/get-pip.py \
+    && python3.9 get-pip.py \
+    && rm get-pip.py
+
+# Update alternatives to prioritize Python 3.9
 RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.9 1 \
-    && update-alternatives --set python3 /usr/bin/python3.9 \
-    && update-alternatives --install /usr/bin/python python /usr/bin/python3.9 1
+    && update-alternatives --set python3 /usr/bin/python3.9
 
-# Upgrade pip
-RUN python3.9 -m pip install --upgrade pip
+# Update the symbolic link for python to point to python3
+RUN ln -sf /usr/bin/python3 /usr/bin/python
 
-# copy requirements file and install
+# Verify installation
+RUN python --version
+RUN pip --version
+# copy requirements file and and install
 COPY ./requirements.txt /opt/
 RUN pip3 install --no-cache-dir -r /opt/requirements.txt
-
 # copy src code into image and chmod scripts
 COPY src ./opt/src
 COPY ./entry_point.sh /opt/
@@ -36,23 +48,20 @@ COPY ./fix_line_endings.sh /opt/
 RUN chmod +x /opt/fix_line_endings.sh
 RUN /opt/fix_line_endings.sh "/opt/src"
 RUN /opt/fix_line_endings.sh "/opt/entry_point.sh"
-
 # Set working directory
 WORKDIR /opt/src
-
-# Set environment variables
+# set python variables and path
 ENV PYTHONUNBUFFERED=TRUE
 ENV PYTHONDONTWRITEBYTECODE=TRUE
 ENV PATH="/opt/src:${PATH}"
 ENV TORCH_HOME="/opt"
 ENV MPLCONFIGDIR="/opt"
 
-# Adjust permissions
-RUN chown -R 1000:1000 /opt \
-    && chmod -R 777 /opt
+RUN chown -R 1000:1000 /opt
 
-# Set non-root user
+RUN chmod -R 777 /opt
+
+# set non-root user
 USER 1000
-
-# Set entrypoint
+# set entrypoint
 ENTRYPOINT ["/opt/entry_point.sh"]
