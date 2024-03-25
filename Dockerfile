@@ -6,7 +6,8 @@ FROM tensorflow/tensorflow:2.15.0-gpu as builder
 RUN apt-get update && \
     apt-get install -y build-essential libffi-dev libssl-dev zlib1g-dev \
     liblzma-dev libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm \
-    libncurses5-dev libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev libpq-dev
+    libncurses5-dev libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev libpq-dev dos2unix
+
 
 # Download and compile Python 3.8
 RUN wget https://www.python.org/ftp/python/3.8.12/Python-3.8.12.tar.xz && \
