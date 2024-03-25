@@ -25,9 +25,9 @@ RUN python3.8 --version
 RUN which python3.8
 
 
-# Set Python 3.8 as the default python3
-RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.8 1 && \
-    update-alternatives --set python3 /usr/bin/python3.8
+# Set Python 3.8 as the default python3, adjusting for its installation in /usr/local/bin
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/local/bin/python3.8 1 && \
+    update-alternatives --set python3 /usr/local/bin/python3.8
 
 # Install pip for Python 3.8
 RUN curl https://bootstrap.pypa.io/get-pip.py | python3.8
