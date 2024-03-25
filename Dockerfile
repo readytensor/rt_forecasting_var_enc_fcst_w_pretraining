@@ -1,8 +1,11 @@
 # Use an TensorFlow-GPU base image
 FROM tensorflow/tensorflow:2.15.0-gpu as builder
 
-# Install Python 3.9 and other dependencies
-RUN apt-get -y update && apt-get install -y --no-install-recommends \
+# Install build dependencies and Python 3.9
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common \
+    && add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     dos2unix \
     wget \
