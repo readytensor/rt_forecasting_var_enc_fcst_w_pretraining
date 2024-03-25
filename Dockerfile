@@ -32,6 +32,10 @@ RUN update-alternatives --install /usr/bin/python3 python3 /usr/local/bin/python
 
 # Install pip for Python 3.8
 RUN curl https://bootstrap.pypa.io/get-pip.py | python3.8
+
+COPY ./requirements.txt /opt/
+RUN pip3 install --no-cache-dir -r /opt/requirements.txt
+
 # copy src code into image and chmod scripts
 COPY src ./opt/src
 COPY ./entry_point.sh /opt/
