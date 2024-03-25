@@ -99,9 +99,7 @@ def run_training(
             trained_pipeline, transformed_data = fit_transform_with_pipeline(
                 training_pipeline, validated_data
             )
-            _, peak = tracemalloc.get_traced_memory()
-            peak_python_memory_mb = peak / (1024**2)
-            tracemalloc.stop()
+
             print("Transformed training data shape:", transformed_data.shape)
 
             # # use default hyperparameters to train model
@@ -112,6 +110,9 @@ def run_training(
                 frequency=data_schema.frequency,
                 hyperparameters=default_hyperparameters,
             )
+        _, peak = tracemalloc.get_traced_memory()
+        peak_python_memory_mb = peak / (1024**2)
+        tracemalloc.stop()
         logger.info(f"Peak Python Allocated Memory: {peak_python_memory_mb:.2f} MB")
 
         # Save pipelines
