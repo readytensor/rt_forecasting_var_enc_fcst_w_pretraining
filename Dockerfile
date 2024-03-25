@@ -6,6 +6,11 @@ RUN apt-get -y update && apt-get install -y --no-install-recommends \
     dos2unix \
     && rm -rf /var/lib/apt/lists/*
 # copy requirements file and and install
+
+# Add a symbolic link to python3 (optional)
+RUN ln -s /usr/local/bin/python3.11 /usr/local/bin/python3 \
+    && ln -s /usr/local/bin/python3.11 /usr/local/bin/python
+
 COPY ./requirements.txt /opt/
 RUN pip3 install --no-cache-dir -r /opt/requirements.txt
 # copy src code into image and chmod scripts
