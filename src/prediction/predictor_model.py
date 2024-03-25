@@ -1,5 +1,4 @@
 import os
-import sys
 import warnings
 from typing import List, Union
 import math
@@ -154,6 +153,7 @@ class Forecaster:
         learning_rate_reduction = ReduceLROnPlateau(
             monitor=loss_to_monitor, patience=patience // 2, factor=0.5, min_lr=1e-7
         )
+
         history = self.vae_model.fit(
             x=X,
             y=y,
@@ -164,6 +164,7 @@ class Forecaster:
             batch_size=self.batch_size,
             shuffle=True,
         )
+
         # recompile the model to reset the optimizer; otherwise re-training slows down
         self.vae_model.compile(optimizer=Adam(self.learning_rate))
         return history
@@ -309,17 +310,12 @@ def train_predictor_model(
         num_exog=history.shape[2] - 1,
         **hyperparameters,
     )
-    import tracemalloc
 
-    tracemalloc.start()
     model.fit(
         training_data=history,
         pre_training_data=pre_training_data,
     )
-    _, peak = tracemalloc.get_traced_memory()
-    peak_python_memory_mb = peak / (1024**2)
-    tracemalloc.stop()
-    logger.info(f"Peak Python Allocated Memory: {peak_python_memory_mb:.2f} MB")
+
     return model
 
 
