@@ -266,7 +266,7 @@ class ResourceTracker(object):
         self.monitor = MemoryMonitor(logger=logger, interval=monitoring_interval)
 
     def __enter__(self):
-        tracemalloc.start()
+        # tracemalloc.start()
         self.start_time = time.time()
         self.monitor.start()
         return self
@@ -274,18 +274,18 @@ class ResourceTracker(object):
     def __exit__(self, exc_type, exc_value, traceback):
         self.end_time = time.time()
         self.monitor.stop()
-        _, peak = tracemalloc.get_traced_memory()
-        tracemalloc.stop()
+        # _, peak = tracemalloc.get_traced_memory()
+        # tracemalloc.stop()
 
         elapsed_time = self.end_time - self.start_time
-        peak_python_memory_mb = peak / 1024**2
+        # peak_python_memory_mb = peak / 1024**2
         process_cpu_peak_memory_mb = self.monitor.get_peak_memory_usage()
         gpu_peak_memory_mb = get_peak_memory_usage()
 
         self.logger.info(f"Execution time: {elapsed_time:.2f} seconds")
-        self.logger.info(
-            f"Peak Python Allocated Memory: {peak_python_memory_mb:.2f} MB"
-        )
+        # self.logger.info(
+        #     f"Peak Python Allocated Memory: {peak_python_memory_mb:.2f} MB"
+        # )
         self.logger.info(
             f"Peak CUDA GPU Memory Usage (Incremental): {gpu_peak_memory_mb:.2f} MB"
         )

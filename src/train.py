@@ -1,3 +1,4 @@
+import tracemalloc
 from config import paths
 from data_models.data_validator import validate_data
 from logger import get_logger, log_error
@@ -51,7 +52,7 @@ def run_training(
     try:
 
         with ResourceTracker(logger, monitoring_interval=0.1):
-
+            tracemalloc.start()
             logger.info("Starting training...")
             # load and save schema
             logger.info("Loading and saving schema...")
@@ -98,6 +99,9 @@ def run_training(
             trained_pipeline, transformed_data = fit_transform_with_pipeline(
                 training_pipeline, validated_data
             )
+            _, peak = tracemalloc.get_traced_memory()
+            peak_python_memory_mb = peak / (1024**2)
+            tracemalloc.stop()
             print("Transformed training data shape:", transformed_data.shape)
 
             # # use default hyperparameters to train model
@@ -108,6 +112,7 @@ def run_training(
                 frequency=data_schema.frequency,
                 hyperparameters=default_hyperparameters,
             )
+        logger.info(f"Peak Python Allocated Memory: {peak_python_memory_mb:.2f} MB")
 
         # Save pipelines
         logger.info("Saving pipelines...")
