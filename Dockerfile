@@ -1,9 +1,9 @@
 # use an tensorflow-gpu base image
-FROM tensorflow/tensorflow:2.15.0-gpu as builder
+FROM tensorflow/tensorflow:2.16.1-gpu as builder
 # Install OS dependencies
 RUN apt-get -y update && apt-get install -y --no-install-recommends \
-         ca-certificates \
-         dos2unix \
+    ca-certificates \
+    dos2unix \
     && rm -rf /var/lib/apt/lists/*
 # copy requirements file and and install
 COPY ./requirements.txt /opt/
