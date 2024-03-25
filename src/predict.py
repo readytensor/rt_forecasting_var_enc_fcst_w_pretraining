@@ -1,4 +1,3 @@
-import tracemalloc
 import numpy as np
 import pandas as pd
 
@@ -94,7 +93,6 @@ def run_batch_predictions(
     """
 
     try:
-        tracemalloc.start()
         with ResourceTracker(logger, monitoring_interval=0.1):
 
             logger.info("Making batch predictions...")
@@ -158,10 +156,6 @@ def run_batch_predictions(
             validated_predictions = validate_predictions(
                 predictions_df, data_schema, model_config["prediction_field_name"]
             )
-        tracemalloc.stop()
-        _, peak_memory = tracemalloc.get_traced_memory()
-        peak_python_memory_mb = peak_memory / (1024**2)
-        logger.info(f"Peak Python Allocated Memory: {peak_python_memory_mb:.2f} MB")
 
         logger.info("Saving predictions dataframe...")
         save_dataframe_as_csv(
