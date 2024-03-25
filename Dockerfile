@@ -1,5 +1,5 @@
 # Use an NVIDIA CUDA base image that includes CUDA and cuDNN
-FROM nvidia/cuda:12.3.1-cudnn8-runtime-ubuntu20.04 as builder
+FROM nvidia/cuda:12.3.2-cudnn9-runtime-ubuntu22.04 as builder
 
 # Avoid prompts from apt
 ENV DEBIAN_FRONTEND=noninteractive
