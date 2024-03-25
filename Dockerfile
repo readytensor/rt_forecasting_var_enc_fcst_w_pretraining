@@ -1,28 +1,29 @@
 # Use an TensorFlow-GPU base image
 FROM tensorflow/tensorflow:2.15.0-gpu as builder
 
-# Install Python 3.9
-RUN apt-get update && apt-get install -y software-properties-common
+# Install necessary packages
+RUN apt-get update && \
+    apt-get install -y software-properties-common python3-apt && \
+    apt-get clean
+
+# Add the deadsnakes PPA
 RUN add-apt-repository ppa:deadsnakes/ppa
-RUN apt-get update && apt-get install -y python3.9 python3.9-distutils
-RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.9 1
-RUN update-alternatives --config python3
 
-
-
-# Install pip for Python 3.9
-RUN apt-get install -y curl && curl https://bootstrap.pypa.io/get-pip.py | python3.9
-
-# Update alternatives to use Python 3.9 as the default python3
-RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.9 1 \
-    && update-alternatives --set python3 /usr/bin/python3.9 \
-    && update-alternatives --install /usr/bin/python python /usr/bin/python3.9 1
-
-# Upgrade pip
-RUN python3.9 -m pip install --upgrade pip
+# Install Python 3.9
+RUN apt-get update && \
+    apt-get install -y python3.9 python3.9-distutils && \
+    apt-get clean && \
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.9 1 && \
+    update-alternatives --config python3
 
 # Verify Python version
 RUN python3 --version
+
+# Install pip for Python 3.9
+RUN apt-get update && \
+    apt-get install -y curl && \
+    curl https://bootstrap.pypa.io/get-pip.py | python3.9 && \
+    apt-get clean
 
 # copy requirements file and install
 COPY ./requirements.txt /opt/
