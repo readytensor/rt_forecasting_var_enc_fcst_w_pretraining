@@ -15,8 +15,14 @@ from tensorflow.keras.optimizers import Adam, SGD
 
 # from prediction.vae_dense_model import VariationalAutoencoderDense as VAE
 from prediction.vae_conv_model import VariationalAutoencoderConv as VAE
-from prediction.pretraining_data_gen import get_pretraining_data
 from logger import get_logger
+from prediction.pretraining_data_gen import (
+    get_pretraining_data,
+    get_kernel_pretrain_data,
+)
+from preprocessing.custom_transformers import TimeSeriesMinMaxScaler
+
+from config import paths
 
 logger = get_logger(__name__)
 
@@ -298,24 +304,42 @@ def train_predictor_model(
     Returns:
         'Forecaster': The Forecaster model
     """
+    kernel_pretrain_data = joblib.load(paths.KERNEL_SYNTH_DATA)
+    encode_len = history.shape[1] - forecast_length
+    num_exog = history.shape[2] - 1
     pre_training_data = get_pretraining_data(
         series_len=history.shape[1],
         forecast_length=forecast_length,
         frequency=frequency,
-        num_exog=history.shape[2] - 1,
-    )
-    model = Forecaster(
-        encode_len=history.shape[1] - forecast_length,
-        decode_len=forecast_length,
-        num_exog=history.shape[2] - 1,
-        **hyperparameters,
+        num_exog=num_exog,
+        scale=False,
     )
 
+    kernel_pre_training_data = get_kernel_pretrain_data(
+        data=kernel_pretrain_data,
+        window_length=history.shape[1],
+        forecast_length=forecast_length,
+        num_exog=num_exog,
+        num_windows=60000,
+        scale=False,
+    )
+    pre_training_data = np.concatenate(
+        [pre_training_data, kernel_pre_training_data], axis=0
+    )
+
+    scaler = TimeSeriesMinMaxScaler(encode_len=history.shape[1] - forecast_length)
+    pre_training_data = scaler.fit_transform(pre_training_data)
+
+    model = Forecaster(
+        encode_len=encode_len,
+        decode_len=forecast_length,
+        num_exog=num_exog,
+        **hyperparameters,
+    )
     model.fit(
         training_data=history,
         pre_training_data=pre_training_data,
     )
-
     return model
 
 

@@ -1,5 +1,8 @@
 import numpy as np
-import sys
+import GPy
+import joblib
+from tqdm import tqdm
+from config import paths
 from data_models.schema_validator import Frequency
 from preprocessing.custom_transformers import TimeSeriesMinMaxScaler
 
@@ -7,9 +10,10 @@ np.random.seed(1)
 
 MAX_NUM_PRETRAINING_SERIES = 10_000
 
+
 def calculate_max_N(T: int, D: int, target_ram_gb: float) -> int:
     """
-    Calculate the maximum value of N for a numpy array with shape [N, T, D] that 
+    Calculate the maximum value of N for a numpy array with shape [N, T, D] that
     fits in the given RAM size.
 
     Args:
@@ -30,7 +34,8 @@ def calculate_max_N(T: int, D: int, target_ram_gb: float) -> int:
 
 
 def generate_seasonal_factors(
-        len_series: int, num_periods: int, len_per_period: int) -> np.ndarray:
+    len_series: int, num_periods: int, len_per_period: int
+) -> np.ndarray:
     """
     Generates a vector of seasonal factors for a time series with repeating cycles,
     with neighboring seasonal factors being correlated.
@@ -58,10 +63,12 @@ def generate_seasonal_factors(
             [
                 np.mean(
                     np.take(
-                        factors, range(i - rolling_window // 2, i + rolling_window // 2 + 1),
-                        mode='wrap'
+                        factors,
+                        range(i - rolling_window // 2, i + rolling_window // 2 + 1),
+                        mode="wrap",
                     )
-                ) for i in range(num_periods)
+                )
+                for i in range(num_periods)
             ]
         )
 
@@ -69,15 +76,21 @@ def generate_seasonal_factors(
     first_period_start_idx = np.random.randint(0, len_per_period)
 
     # Create the initial partial period from the first_period_start_idx
-    initial_partial_period = np.repeat(factors[0], len_per_period - first_period_start_idx)
+    initial_partial_period = np.repeat(
+        factors[0], len_per_period - first_period_start_idx
+    )
 
     # Adjust the cycle to start from the remaining part of the first period
     remaining_cycle = np.repeat(factors[1:], len_per_period)
     adjusted_first_period = np.repeat(factors[0], first_period_start_idx)
 
     # Combine the initial partial period with the adjusted cycle
-    seasonal_factors = np.concatenate([initial_partial_period, remaining_cycle, adjusted_first_period])
-    seasonal_factors = np.tile(seasonal_factors, (len_series // len(seasonal_factors) + 1))[:len_series]
+    seasonal_factors = np.concatenate(
+        [initial_partial_period, remaining_cycle, adjusted_first_period]
+    )
+    seasonal_factors = np.tile(
+        seasonal_factors, (len_series // len(seasonal_factors) + 1)
+    )[:len_series]
 
     return seasonal_factors
 
@@ -98,13 +111,15 @@ def generate_multiplicative_trend_factors(len_series: int) -> np.ndarray:
     """
     # Calculate the minimum and maximum trend percentage factors
     min_trend_perc = np.exp(np.log(0.5e-1) / len_series)
-    max_trend_perc = np.exp(np.log(0.5e+1) / len_series)
+    max_trend_perc = np.exp(np.log(0.5e1) / len_series)
 
     # Sample a trend percentage from a uniform distribution
-    trend_perc = trend_perc = np.random.triangular(min_trend_perc, 1, max_trend_perc, size=1)
+    trend_perc = trend_perc = np.random.triangular(
+        min_trend_perc, 1, max_trend_perc, size=1
+    )
 
     # Create a vector of trend factors
-    trend_factors = np.array([1 * (trend_perc ** i) for i in range(len_series)])
+    trend_factors = np.array([1 * (trend_perc**i) for i in range(len_series)])
 
     return np.squeeze(trend_factors)
 
@@ -140,7 +155,8 @@ def generate_linear_trend_factors(len_series: int) -> np.ndarray:
 
 
 def generate_random_walk(
-        len_series: int, mean: float = 1.0, std_dev: float = 0.01) -> np.ndarray:
+    len_series: int, mean: float = 1.0, std_dev: float = 0.01
+) -> np.ndarray:
     """
     Generates a multiplicative random walk sequence for a time series.
 
@@ -166,7 +182,8 @@ def generate_random_walk(
 
     return np.array(random_walk)
 
-def generate_noise(len_series: int, std_dev: float=0.02) -> np.ndarray:
+
+def generate_noise(len_series: int, std_dev: float = 0.02) -> np.ndarray:
     """
     Generates a vector of noise for a time series.
 
@@ -190,7 +207,8 @@ def generate_noise(len_series: int, std_dev: float=0.02) -> np.ndarray:
 
 
 def generate_synthetic_data(
-        num_series: int, len_series: int, frequency: Frequency) -> np.ndarray:
+    num_series: int, len_series: int, frequency: Frequency
+) -> np.ndarray:
     """
     Generates synthetic time series data for a given frequency with optional trend,
     seasonality, and noise.
@@ -237,7 +255,8 @@ def generate_synthetic_data(
 
 
 def generate_seasonality_for_frequency(
-        len_series: int, frequency: Frequency) -> np.ndarray:
+    len_series: int, frequency: Frequency
+) -> np.ndarray:
     """
     Generates seasonality factors based on the given frequency.
 
@@ -286,20 +305,94 @@ def generate_seasonality_for_frequency(
             hours_in_day = np.random.choice(range(8, 24))
 
         hourly_factors = generate_seasonal_factors(len_series, hours_in_day, 1)
-        hourly_factors *= generate_seasonal_factors(len_series, 7, hours_in_day)  # 7 days in a week
-        hourly_factors *= generate_seasonal_factors(len_series, 52, hours_in_day * 7)  # 52 weeks in a year
+        hourly_factors *= generate_seasonal_factors(
+            len_series, 7, hours_in_day
+        )  # 7 days in a week
+        hourly_factors *= generate_seasonal_factors(
+            len_series, 52, hours_in_day * 7
+        )  # 52 weeks in a year
         return hourly_factors
     else:
         # Default case, no seasonality
         return np.ones(len_series)
 
 
+def generate_with_kernels(
+    window_length: int, n_kernels: int = 5, n_samples: int = 500
+) -> np.ndarray:
+    """
+    Generates synthetic time series data for each window in the input data using GPy.
+
+    Parameters:
+    - window_length (int): The length of each window.
+    - n_kernels (int): The number of kernels to sample for each window.
+    - n_samples (int): The number of synthetic samples to generate.
+
+    Returns:
+    - np.ndarray: The synthetic time-series data for each window, maintaining the input shape.
+    """
+    w = window_length
+    synthetic_series = np.zeros((n_samples, w))
+    used_combinations = set()
+
+    # Defining a variety of kernels
+    kernel_bank = [
+        GPy.kern.RBF(input_dim=1, variance=1.0, lengthscale=1.0),
+        GPy.kern.RBF(input_dim=1, variance=2.0, lengthscale=2.0),
+        GPy.kern.RBF(input_dim=1, variance=2.0, lengthscale=1.0),
+        GPy.kern.RBF(input_dim=1, variance=0.5, lengthscale=1.0),
+        GPy.kern.RBF(input_dim=1, variance=1.0, lengthscale=0.5),
+        GPy.kern.PeriodicExponential(1, lengthscale=1.0, period=1.0),
+        GPy.kern.PeriodicExponential(1, lengthscale=1.0, period=2.0),
+        GPy.kern.PeriodicExponential(1, lengthscale=1.0, period=0.5),
+        GPy.kern.PeriodicExponential(1, lengthscale=2.0, period=1.0),
+        GPy.kern.PeriodicExponential(1, lengthscale=2.0, period=2.0),
+        GPy.kern.Linear(input_dim=1, variances=1.0),
+        GPy.kern.Linear(input_dim=1, variances=2.0),
+        GPy.kern.Linear(input_dim=1, variances=0.5),
+    ]
+
+    for i in tqdm(
+        range(n_samples), desc="Generating synthetic series with GPy kernel synthesizer"
+    ):
+        # Sample kernels and combine them
+        sampled_kernels = np.random.choice(kernel_bank, size=n_kernels, replace=True)
+        combined_kernel = sampled_kernels[0]
+        for k in sampled_kernels[1:]:
+            if np.random.rand() > 0.5:
+                combined_kernel += k
+            else:
+                combined_kernel *= k
+
+        combination_key = "".join(sorted([str(k) for k in sampled_kernels]))
+
+        if combination_key in used_combinations:
+            continue  # Skip this iteration if the combination was used before
+
+        # Dummy initial data for model instantiation
+        X_dummy = np.linspace(0, w - 1, w).reshape(-1, 1)
+        Y_dummy = np.zeros((w, 1))
+
+        # Create a GP model with the combined kernel
+        gp = GPy.models.GPRegression(X_dummy, Y_dummy, kernel=combined_kernel)
+
+        # Assuming evenly spaced time points within each window
+        time_points = np.linspace(0, w - 1, w).reshape(-1, 1)
+        # Sample synthetic data from the GP model for the current window
+        Y = gp.posterior_samples_f(time_points, full_cov=False, size=1)
+        synthetic_series[i, :] = Y.squeeze()
+        if i % 10 == 0:
+            joblib.dump(synthetic_series, paths.KERNEL_SYNTH_DATA)
+    return synthetic_series
+
+
 def get_pretraining_data(
-        series_len: int,
-        forecast_length: int,
-        frequency: Frequency,
-        num_exog: int = 0
-    ) -> np.ndarray:
+    series_len: int,
+    forecast_length: int,
+    frequency: Frequency,
+    num_exog: int = 0,
+    scale: bool = True,
+) -> np.ndarray:
     """
     Generates synthetic data for pretraining, with optional exogenous features and scaling.
 
@@ -309,9 +402,10 @@ def get_pretraining_data(
         frequency (Frequency): Frequency of the data such as MONTHLY, DAILY, etc.
         num_exog (int): The number of exogenous features to generate.
                         If 0, no exogenous features are added.
+        scale (bool): Whether to scale the data or not.
 
     Returns:
-        np.ndarray: A 3D numpy array of shape [num_series, series_len, 1 + num_exog] 
+        np.ndarray: A 3D numpy array of shape [num_series, series_len, 1 + num_exog]
                     containing the synthetic time series data and exogenous features.
     """
     # Calculate # of samples to generate
@@ -324,30 +418,60 @@ def get_pretraining_data(
 
     # Add exogenous features if num_exog is positive
     if num_exog > 0:
-        exogenous_features = np.random.standard_normal((num_series, series_len, num_exog))
+        exogenous_features = np.random.standard_normal(
+            (num_series, series_len, num_exog)
+        )
         synthetic_data = np.concatenate((synthetic_data, exogenous_features), axis=2)
 
     # Scale data
     synthetic_data = synthetic_data.astype(np.float32)
-    scaler = TimeSeriesMinMaxScaler(encode_len=series_len - forecast_length)
-    synthetic_data = scaler.fit_transform(synthetic_data)
+    if scale:
+        scaler = TimeSeriesMinMaxScaler(encode_len=series_len - forecast_length)
+        synthetic_data = scaler.fit_transform(synthetic_data)
 
     return synthetic_data
 
 
-if __name__ == "__main__":
-    
-    # Seasonal factors
-    sample_seasonal_factors = generate_seasonal_factors(20, 3, 6)
-    print(sample_seasonal_factors)
+def get_kernel_pretrain_data(
+    data: np.ndarray,
+    window_length: int,
+    num_windows: int,
+    forecast_length: int,
+    num_exog: int = 0,
+    scale: bool = True,
+) -> np.ndarray:
+    """
+    Sample windows of length `window_length` from the input data.
 
-    # Verify the calculation of max_trend_perc for len_series=10000
-    # max_trend_perc_example = calculate_max_trend_perc(10000)
-    # print(max_trend_perc_example)
-    
-    # sample_trend_factors = generate_trend_factors(10)
-    # print(sample_trend_factors)
+    Args:
+        data (np.ndarray): The input data.
+        window_length (int): The length of each window.
+        num_windows (int): The number of windows to sample.
+        forecast_length (int): The length of forecast window.
+        num_exog (int): The number of exogenous features in the data.
+        scale (bool): Whether to scale the data or not.
 
+    Returns:
+        np.ndarray: A 3D numpy array of shape [num_windows, window_length, num_features]
+                    containing the sampled windows.
+    """
+    num_series, old_window_length = data.shape
+    windows = np.zeros((num_windows, window_length))
 
+    for i in range(num_windows):
+        series_idx = np.random.randint(0, num_series)
+        start_idx = np.random.randint(0, old_window_length - window_length)
+        windows[i] = data[series_idx, start_idx : start_idx + window_length]
 
+    windows = windows[:, :, np.newaxis]
+    if num_exog > 0:
+        exogenous_features = np.random.standard_normal(
+            (windows.shape[0], windows.shape[1], num_exog)
+        )
+        windows = np.concatenate((windows, exogenous_features), axis=2)
 
+    if scale:
+        scaler = TimeSeriesMinMaxScaler(encode_len=window_length - forecast_length)
+        windows = scaler.fit_transform(windows)
+
+    return windows
