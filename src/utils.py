@@ -248,10 +248,9 @@ def get_peak_memory_usage():
     Returns the peak memory usage by current cuda device (in MB) if available
     """
     if not tf.config.list_physical_devices("GPU"):
-        return None
+        return 0
 
-    current_device = "GPU:0"
-    peak_memory = tf.config.experimental.get_memory_info(current_device)["peak"]
+    peak_memory = tf.config.experimental.get_memory_info("GPU:0")["peak"]
     return peak_memory / (1024 * 1024)
 
 
@@ -266,8 +265,8 @@ class ResourceTracker(object):
         self.monitor = MemoryMonitor(logger=logger, interval=monitoring_interval)
 
     def __enter__(self):
-        tracemalloc.start()
         self.start_time = time.time()
+        tracemalloc.start()
         self.monitor.start()
         return self
 
